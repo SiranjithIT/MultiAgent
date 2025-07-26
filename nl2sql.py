@@ -69,27 +69,26 @@ class SQLChain(SQLQueryChain):
     return chain.invoke(inputs)
   
 def main():
-    """CLI mode for testing"""
-    try:
-        db = DatabaseConnect()
-        
-        print("Database connected successfully!")
-        
-        chain = SQLChain(db, llm)
-        while True:
-            question = input("Enter your question (or type 'exit' to quit): ")
-            if question.lower() == 'exit':
-                break
-            
-            if not question.strip():
-                print("Please enter a valid question.")
-                continue
-            print(f"\nQuestion: {question}")
-            
-            response = chain.invoke({"question": question})
-            print(f"Response: {response}")
-    except Exception as e:
-        print(f"Error: {e}")
+  """CLI mode for testing"""
+  try:
+    db = DatabaseConnect()
+    
+    print("Database connected successfully!")
+    
+    chain = SQLChain(db, llm)
+    while True:
+      question = input("Enter your question (or type 'exit' to quit): ")
+      if question.lower() == 'exit':
+        break
+      
+      if not question.strip():
+        print("Please enter a valid question.")
+        continue
+      
+      response = chain.invoke({"question": question})
+      print(f"Response: {response}")
+  except Exception as e:
+    print(f"Error: {e}")
     
 if __name__ == "__main__":
   from model import *
