@@ -33,10 +33,19 @@ class RouterAgent(BaseAgent):
     
   def process(self, state: WorkflowState)->WorkflowState:
     prompt = ChatPromptTemplate.from_messages([
-      ("system", """You are an helpful routing agent. Use the question for analysis and give a single word routing decision. The routing options are as follows,
-        1) web(For searching the web to solve the user's query).
-        2) nl2sql(For accessing the database).
-        3) general(For llm based reply).
+      ("system", """You are a helpful routing agent. Your job is to analyze the user's question and return only one 
+              of the following routing decisions based on its intent:
+
+              web - If the user is asking for current information, real-time data, or referencing a specific name, location, or entity that may require web access.
+
+              nl2sql - If the user is asking to query a database, fetch structured data, or perform operations that require SQL or database access.
+
+              general - If the user is asking for a general explanation, definition, code sample, or any response that can be handled by a language model without external data.
+
+              Instructions:
+              1.Return only one of the options: web, nl2sql, or general
+              2.Do not include any explanation or reasoning in your response.
+              3.Base your decision only on the question provided.
       """),
       ("human","""
       Query: {query}
