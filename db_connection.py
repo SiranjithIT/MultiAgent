@@ -1,6 +1,11 @@
 from langchain_community.utilities import SQLDatabase
 from dotenv import load_dotenv
+from langchain_chroma import Chroma
 import os
+from model import embedding
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+
 
 load_dotenv()
 
@@ -33,3 +38,28 @@ class DatabaseConnect:
       
   def run_query(self, query: str):
     return self.db.run(query)
+  
+class VectorDBConnect:
+  def __init__(self):
+    self.vector_store = Chroma(
+      collection_name="MultiAgent",
+      embedding_function=embedding,
+      persist_directory="./chroma_db"
+    )
+    
+  def text_split(self, data: str):
+    text_splitter = RecursiveCharacterTextSplitter(
+      chunk_size = 1000,
+      chunk_overlap = 200,
+      add_start_index = True,
+    )
+    doc = [Document(page_content=data)]
+    return text_splitter.split_documents(doc)
+  
+  def add_document(self, data: str):
+    doc = self.text_split(data)
+    self.vector_store.add_documents(documents=doc)
+    
+  def get_similar_content(self, query: str):
+    return self.vector_store.similarity_search(query=query, k=5)
+  

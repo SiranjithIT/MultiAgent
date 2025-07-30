@@ -4,6 +4,7 @@ from typing import List, Dict, Any
 from abc import ABC, abstractmethod
 from langchain_core.prompts import ChatPromptTemplate
 from model import *
+from db_connection import *
 
 @dataclass
 class WorkflowState:
@@ -17,6 +18,7 @@ class BaseAgent:
     self.name = name
     self.role = "BaseAgent"
     self.llm = llm
+    self.vector_db = VectorDBConnect()
   
   @abstractmethod
   def process(self,state: WorkflowState)->WorkflowState:
@@ -26,6 +28,7 @@ class BaseAgent:
     msg = f"{self.name}: {msg}"
     state.messages.append(msg)
 
+
 class RouterAgent(BaseAgent):
   def __init__(self, name):
     super().__init__(name)
@@ -33,19 +36,15 @@ class RouterAgent(BaseAgent):
     
   def process(self, state: WorkflowState)->WorkflowState:
     prompt = ChatPromptTemplate.from_messages([
-      ("system", """You are a helpful routing agent. Your job is to analyze the user's question and return only one 
-              of the following routing decisions based on its intent:
+      ("system", """You are a helpful routing agent. Your job is to analyze the user's question and return only one of the following routing decisions based on its intent:
+        1. web - If the user is asking for current information, real-time data, or referencing a specific name(not user name), location, or entity that may require web access.
+        2. nl2sql - If the user is asking to query a database, fetch structured data, or perform operations that require SQL or database access.
+        3. general - If the user is asking for a general explanation, definition, code sample, any response that can be handled by a language model without external data or past memory related question.
 
-              web - If the user is asking for current information, real-time data, or referencing a specific name, location, or entity that may require web access.
-
-              nl2sql - If the user is asking to query a database, fetch structured data, or perform operations that require SQL or database access.
-
-              general - If the user is asking for a general explanation, definition, code sample, or any response that can be handled by a language model without external data.
-
-              Instructions:
-              1.Return only one of the options: web, nl2sql, or general
-              2.Do not include any explanation or reasoning in your response.
-              3.Base your decision only on the question provided.
+      Instructions:
+        1.Return only one of the options: web, nl2sql, or general
+        2.Do not include any explanation or reasoning in your response.
+        3.Base your decision only on the question provided.
       """),
       ("human","""
       Query: {query}
@@ -108,7 +107,6 @@ class NL2SQLAgent(BaseAgent):
     self.role = "Natural Language Querying"
     
   def process(self, state: WorkflowState)->WorkflowState:
-    from db_connection import DatabaseConnect
     from nl2sql import SQLChain
     db = DatabaseConnect()
     chain = SQLChain(db, llm)
@@ -124,20 +122,23 @@ class General(BaseAgent):
       self.role = "General Agent"
       
     def process(self, state: WorkflowState)->WorkflowState:
+      recall_memory = self.vector_db.get_similar_content(state.user_message)
       prompt = ChatPromptTemplate.from_messages([
           ("system", """You are an helpful assistant providing response to user's query.
-          Provide only the data that you have, do not hallucinate and generate fake data.
+          Provide only the data that you have or from the context provided, do not hallucinate and generate fake data.
           """),
           ("human","""
           Query: {query}
-          Please provide the appropriate result based on the user query.
+          Conversation history: {context}
+          Please provide the appropriate result based on the user query and conversation history. If conversation history does not meet with the user query, respond to the query with your knowledge or greet the user ignoring the conversation history.
           """)
         ])
       
       chain = prompt | self.llm
       
       response = chain.invoke({
-          "query" : state.user_message
+          "query" : state.user_message,
+          "context" : recall_memory
         })
       state.data['result'] = response.content
       self.add_message(state, response.content)
@@ -151,6 +152,7 @@ class RespondAgent(BaseAgent):
     
   def process(self, state: WorkflowState)->WorkflowState:
     state.current_state = "End"
+    self.vector_db.add_document("Query: "+state.user_message+"\nResult: "+state.data['result'])
     return state
 
 class WorkflowManager():
@@ -159,6 +161,8 @@ class WorkflowManager():
     self.web_search = WebSearchAgent("WebSearchAgent")
     self.nl2sql = NL2SQLAgent("NL2SQLAgent")
     self.respond = RespondAgent("RespondAgent")
+    self.general = General("GeneralAgent")
+    
     self.workflow = self._build_workflow()
     
   def _build_workflow(self)->StateGraph:
@@ -166,6 +170,7 @@ class WorkflowManager():
     workflow.add_node("router", self._router_node)
     workflow.add_node("web", self._websearch_node)
     workflow.add_node("nl2sql", self._nl2sql_node)
+    workflow.add_node("general", self._general_node)
     workflow.add_node("respond", self._respond_node)
     
     workflow.add_edge(START, "router")
@@ -176,6 +181,7 @@ class WorkflowManager():
     
     workflow.add_edge("web", "respond")
     workflow.add_edge("nl2sql", "respond")
+    workflow.add_edge("general", "respond")
     workflow.add_edge("respond", END)
     
     return workflow.compile()
@@ -193,6 +199,8 @@ class WorkflowManager():
   def _respond_node(self, state: WorkflowState)->WorkflowState:
     return self.respond.process(state)
   
+  def _general_node(self, state: WorkflowState)->WorkflowState:
+    return self.general.process(state)
   
   def run(self, query: str)->WorkflowState:
     print("Multi-agent System started processing this query", query)
