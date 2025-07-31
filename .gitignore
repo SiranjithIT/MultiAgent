@@ -2,4 +2,4 @@
 /__pycache__
 /.vscode
 /test.py
-/chroma_db
+/*_db
