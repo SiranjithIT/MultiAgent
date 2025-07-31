@@ -37,15 +37,15 @@ class RouterAgent(BaseAgent):
   def process(self, state: WorkflowState)->WorkflowState:
     prompt = ChatPromptTemplate.from_messages([
       ("system", """You are a helpful routing agent. Your job is to analyze the user's question and return only one of the following routing decisions based on its intent:
-        1. web - If the user is asking for current information, real-time data, or referencing a specific name(not user name), location, or entity that may require web access.
-        2. nl2sql - If the user is asking to query a database, fetch structured data, or perform operations that require SQL or database access.
-        3. general - If the user is asking for a general explanation, definition, code sample, any response that can be handled by a language model without external data or past memory related question.
+      1. web - If the user is asking for current information, real-time data, or referencing a specific name (not a user name), location, or entity that may require web access.
+      2. nl2sql - If the user is asking to query a database, fetch structured data, or perform operations that require SQL or database access.
+      3. general - If the user is asking for a general explanation, definition, code sample, or if the question refers to past conversation context or user-specific details stored in memory.
 
       Instructions:
-        1.Return only one of the options: web, nl2sql, or general
-        2.Do not include any explanation or reasoning in your response.
-        3.Base your decision only on the question provided.
-      """),
+      - Return only one of the options: web, nl2sql, or general.
+      - Do not include any explanation or reasoning in your response.
+      - Base your decision only on the question provided.
+    """),
       ("human","""
       Query: {query}
       
